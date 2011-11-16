@@ -33,7 +33,7 @@ def add_video(meta, type):
     if type == 'movie':
         contextMenuItems = add_contextmenu(watched_mark, meta['title'], type, meta['imdb_id'], meta['tmdb_id'], meta['year'])
         addon.add_video_item({'url': 'none', 'video_type': type}, meta, contextMenuItems, img=meta['cover_url'], fanart=meta['backdrop_url'])    
-    if type == 'tvshow':
+    if type == 'tvshow' or 'episode':
         contextMenuItems = add_contextmenu(watched_mark, meta['title'], type, imdb_id)    
         addon.add_video_item({'url': 'none', 'video_type': type}, meta, contextMenuItems, img=meta['cover_url'])    
 
@@ -84,7 +84,7 @@ elif mode == 'refresh_meta':
         if index > -1:
             new_imdb_id = search_meta[index]['imdb_id']
             new_tmdb_id = search_meta[index]['tmdb_id']       
-            meta = metaget.update_meta(name, old_imdb_id=imdb_id, old_tmdb_id=tmdb_id, new_imdb_id=new_imdb_id, new_tmdb_id=new_tmdb_id, year=year)   
+            meta = metaget.update_meta('movie', name, imdb_id=imdb_id, tmdb_id=tmdb_id, new_imdb_id=new_imdb_id, new_tmdb_id=new_tmdb_id, year=year)   
             xbmc.executebuiltin("Container.Refresh")
     else:
         msg = ['No matches found']
