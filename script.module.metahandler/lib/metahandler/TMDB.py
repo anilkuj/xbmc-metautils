@@ -239,8 +239,9 @@ class TMDB(object):
 
     def _search_movie(self, name, year=''):
         ''' Helper method to start a TMDB Movie.search request - search by Name/Year '''
+        name = urllib.quote(name)
         if year:
-            name = urllib.quote(name) + '+' + year
+            name = name + '+' + year
         return self._do_request('Movie.search',name)
         
 
