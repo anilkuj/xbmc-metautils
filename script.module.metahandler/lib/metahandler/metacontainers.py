@@ -79,45 +79,34 @@ class MetaContainer:
                 print 'Extraction success!'
                 return True
      
-    def install_metadata_container(self, workingdir,containerpath,dbtype,installtype):
+    def install_metadata_container(self, workingdir,containerpath,installtype):
     
         #NOTE: This function is handled by higher level functions in the Default.py
-        
-        if xbmc_imported==True:
-    
-            if dbtype=='tvshow' or dbtype=='movie':
-    
-                if installtype == 'database' or installtype == 'covers' or installtype == 'backdrops':
-    
-                    meta_caches=os.path.join(workingdir,'meta_caches')
-                    imgspath=os.path.join(meta_caches,dbtype)
-                    cachepath=os.path.join(meta_caches,'video_cache.db')
-    
-                    if not os.path.exists(meta_caches):
-                        #create the meta folders if they do not exist
-                        self.make_dirs(workingdir)
-    
-                    if installtype=='database':
-                        #delete old db files
-                        try: os.remove(cachepath)
-                        except: pass
-    
-                        #extract the db zip to 'themoviedb' or 'TVDB'
-                        self._extract_zip(containerpath,meta_caches)
-    
-                    if installtype=='covers' or installtype=='backdrops':
-                        #delete old folders
-                        deleted = self._del_path(os.path.join(imgspath,installtype))
-    
-                        #extract the covers or backdrops folder zip to 'movie' or 'tv'
-                        if deleted == True: self._extract_zip(containerpath,imgspath)
-                else:
-                    print 'not a valid installtype:',installtype
-                    return False
-            else:
-                print 'not a valid dbtype:',dbtype
-                print 'dbtype must be either "tv" or "movie"'
-                return False
-        else:                          
-            print 'Not running under xbmc :( install container function unavaliable.'
+
+        if installtype == 'database' or installtype == 'covers' or installtype == 'backdrops':
+
+            meta_caches=os.path.join(workingdir,'meta_caches')
+            imgspath=os.path.join(meta_caches,dbtype)
+            cachepath=os.path.join(meta_caches,'video_cache.db')
+
+            if not os.path.exists(meta_caches):
+                #create the meta folders if they do not exist
+                self.make_dirs(workingdir)
+
+            if installtype=='database':
+                #delete old db files
+                try: os.remove(cachepath)
+                except: pass
+
+                #extract the db zip to 'themoviedb' or 'TVDB'
+                self._extract_zip(containerpath,meta_caches)
+
+            if installtype=='covers' or installtype=='backdrops':
+                #delete old folders
+                deleted = self._del_path(os.path.join(imgspath,installtype))
+
+                #extract the covers or backdrops folder zip to 'movie' or 'tv'
+                if deleted == True: self._extract_zip(containerpath,imgspath)
+        else:
+            print 'not a valid installtype:',installtype
             return False
