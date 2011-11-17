@@ -35,7 +35,7 @@ def add_video(meta, type):
         addon.add_video_item({'url': 'none', 'video_type': type}, meta, contextMenuItems, img=meta['cover_url'], fanart=meta['backdrop_url'])    
     if type == 'tvshow' or 'episode':
         contextMenuItems = add_contextmenu(watched_mark, meta['title'], type, imdb_id)    
-        addon.add_video_item({'url': 'none', 'video_type': type}, meta, contextMenuItems, img=meta['cover_url'])    
+        addon.add_video_item({'url': 'none', 'video_type': type}, meta, contextMenuItems, img=meta['cover_url'], fanart=meta['backdrop_url'])    
 
     
 if mode == 'main':
@@ -56,7 +56,7 @@ if mode == 'main':
             
     #Search for TV Show
     meta = metaget.get_meta('tvshow','The Simpsons')
-    addon.add_directory({'url': 'none', 'mode': 'tvseasons', 'imdb_id': meta['imdb_id']}, meta, img=meta['cover_url'], fanart=meta['backdrop_url'])
+    addon.add_directory({'url': 'none', 'mode': 'tvseasons', 'imdb_id': meta['imdb_id'], 'name': 'The Simpsons'}, meta, img=meta['cover_url'], fanart=meta['backdrop_url'])
     
 
     #episode=metaget.get_episode_meta('tt0096697', '1', '1')
@@ -94,17 +94,19 @@ elif mode == 'refresh_meta':
 elif mode == 'tvseasons':   
     metaget=metahandlers.MetaData()
     season_list = ['1','2', '3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22','23']
-    season_meta = metaget.get_seasons(imdb_id, season_list)
+    name = addon.queries.get('name', None)
+    season_meta = metaget.get_seasons(name, imdb_id, season_list)
     for season in season_list:
         cur_season = season_meta[int(season) - 1]
-        addon.add_directory({'mode': 'tvepisodes', 'url': 'none', 'imdb_id': imdb_id, 'season': season}, {'title': 'Season ' + season}, total_items=len(season_list), img=cur_season['cover_url'])
+        addon.add_directory({'mode': 'tvepisodes', 'url': 'none', 'imdb_id': imdb_id, 'name': name, 'season': season}, {'title': 'Season ' + season}, total_items=len(season_list), img=cur_season['cover_url'], fanart=cur_season['backdrop_url'])
         
 
 elif mode == 'tvepisodes':   
     metaget=metahandlers.MetaData()
+    name = addon.queries.get('name', None)    
     episodes = range(1,10)
     for episode in episodes:
-        episode_meta=metaget.get_episode_meta(imdb_id, season, episode)
+        episode_meta=metaget.get_episode_meta(name, imdb_id, season, episode)
         add_video(episode_meta, 'episode')
 
 
