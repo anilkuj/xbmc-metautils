@@ -374,6 +374,7 @@ class MetaData:
       
         self._dl_code(meta['backdrop_url'],backdrop_path)              
 
+
     def _picname(self,url):
         '''
         Get image name from url (ie my_movie_poster.jpg)      
@@ -409,7 +410,25 @@ class MetaData:
         else:
             if url is not None:
                 print 'Not a valid url: %s ' % url
-      
+
+
+    def _valid_imdb_id(self, imdb_id):
+        '''
+        Check and return a valid IMDB ID    
+        
+        Args:
+            imdb_id (str): IMDB ID
+        Returns:
+            imdb_id (str) if valid with leading tt, else None
+        '''      
+        # add the tt if not found. integer aware.       
+        if not imdb_id.startswith('tt'):
+            imdb_id = 'tt%s' % imdb_id
+        if re.search('tt[0-9]{7}', imdb_id):
+            return imdb_id
+        else:
+            return None
+          
 
     def get_meta(self, type, name, imdb_id='', tmdb_id='', year=''):
         '''
@@ -433,11 +452,9 @@ class MetaData:
         print 'Attempting to retreive meta data for %s: %s %s %s %s' % (type, name, year, imdb_id, tmdb_id)
         
         if imdb_id:
-            # add the tt if not found. integer aware.
-            imdb_id=str(imdb_id)
-            if not imdb_id.startswith('tt'):
-                imdb_id = "tt%s" % imdb_id
+            imdb_id = self._valid_imdb_id(imdb_id)
 
+        if imdb_id:
             meta = self._cache_lookup_by_id(type, imdb_id=imdb_id)
         elif tmdb_id:
             meta = self._cache_lookup_by_id(type, tmdb_id=tmdb_id)
@@ -524,6 +541,9 @@ class MetaData:
         '''
         print '---------------------------------------------------------------------------------------'
         print 'Updating meta data: %s Old: %s %s New: %s %s Year: %s' % (name, imdb_id, tmdb_id, new_imdb_id, new_tmdb_id, year)
+        
+        if imdb_id:
+            imdb_id = self._valid_imdb_id(imdb_id)        
         
         if imdb_id:
             meta = self._cache_lookup_by_id(type, imdb_id=imdb_id)
@@ -712,7 +732,7 @@ class MetaData:
         
         if type == self.type_movie:
             table = 'movie_meta'
-        elif type == self.type.tvshow:
+        elif type == self.type_tvshow:
             table = 'tvshow_meta'
             
         if imdb_id:
@@ -988,11 +1008,12 @@ class MetaData:
         return movie_list
 
             
-    def get_episode_meta(self, imdb_id, season, episode):
+    def get_episode_meta(self, name, imdb_id, season, episode):
         '''
         Requests meta data from TVDB for TV episodes, searches local cache db first.
         
         Args:
+            name (str): full name of tvshow you are searching
             imdb_id (str): IMDB ID
             season (int): tv show season number, number only no other characters
             episode (int): tv show episode number, number only no other characters
@@ -1008,13 +1029,10 @@ class MetaData:
         searchTVDB = True
         
         if imdb_id:
-            # add the tt if not found. integer aware.
-            imdb_id=str(imdb_id)
-            if not imdb_id.startswith('tt'):
-                imdb_id = "tt%s" % imdb_id
+            imdb_id = self._valid_imdb_id(imdb_id)
                 
         #Find tvdb_id for the TVshow
-        tvdb_id = self._get_tvdb_id(imdb_id)
+        tvdb_id = self._get_tvdb_id(name, imdb_id)
         
         #Check if it exists in local cache first
         meta = self._cache_lookup_episode(imdb_id, tvdb_id, season, episode)
@@ -1023,7 +1041,7 @@ class MetaData:
         if meta is None:
             
             if tvdb_id == '' or tvdb_id is None:
-                print "Could not find TVshow with imdb " + imdb_id
+                print "Could not find TVshow with imdb: %s " % imdb_id
                 
                 meta = {}
                 meta['imdb_id']=imdb_id
@@ -1078,8 +1096,9 @@ class MetaData:
             meta['trailer_url']=''
             meta['premiered']=meta['premiered']
             meta = self._get_tv_extra(meta)
-            meta['overlay'] = self._get_watched_episode(meta)
+            meta['overlay'] = self._get_watched_episode(meta)          
             self._cache_save_episode_meta(meta)
+            meta['backdrop_url'] = self._get_tvshow_backdrops(imdb_id, tvdb_id)            
         
         else:
             print 'Episode found on db, meta='+str(meta)
@@ -1125,19 +1144,28 @@ class MetaData:
         return meta
 
 
-    def _get_tvdb_id(self, imdb_id):
+    def _get_tvdb_id(self, name, imdb_id):
         '''
         Retrieves TVID for a tv show that has already been scraped and saved in cache db.
         
         Used when scraping for season and episode data
         
         Args:
+            name (str): full name of tvshow you are searching            
             imdb_id (str): IMDB ID
                         
         Returns:
             (str) imdb_id 
         '''      
-        sql_select = "SELECT * FROM tvshow_meta WHERE imdb_id = '%s'" % imdb_id
+        
+        #clean tvshow name of any extras       
+        name =  self._clean_string(name.lower())
+        
+        if imdb_id:
+            sql_select = "SELECT tvdb_id FROM tvshow_meta WHERE imdb_id = '%s'" % imdb_id
+        elif name:
+            sql_select = "SELECT tvdb_id FROM tvshow_meta WHERE title = '%s'" % name
+            
         print 'Retrieving TVDB ID'
         print 'SQL SELECT: %s' % sql_select
         
@@ -1186,6 +1214,7 @@ class MetaData:
                                'episode_meta.season as season, '
                                'episode_meta.episode as episode, '
                                'episode_meta.overlay as overlay, '
+                               'tvshow_meta.backdrop_url as backdrop_url, '                               
                                'episode_meta.poster as cover_url ' 
                                'FROM episode_meta, tvshow_meta WHERE '
                                'episode_meta.imdb_id = tvshow_meta.imdb_id AND '
@@ -1321,11 +1350,10 @@ class MetaData:
         elif type == 'tvshow':
             table='tvshow_meta'
         
-        # add the tt if not found. integer aware.
-        imdb_id=str(imdb_id)
         if imdb_id:
-            if not imdb_id.startswith('tt'):
-                imdb_id = "tt%s" % imdb_id
+            imdb_id = self._valid_imdb_id(imdb_id)
+
+        if imdb_id:
             sql_update = "UPDATE %s set trailer_url='%s' WHERE imdb_id = '%s'" % (table, trailer, imdb_id)
         elif tmdb_id:
             sql_update = "UPDATE %s set trailer_url='%s' WHERE tmdb_id = '%s'" % (table, trailer, tmdb_id)
@@ -1354,7 +1382,10 @@ class MetaData:
         '''   
         print '---------------------------------------------------------------------------------------'
         print 'Updating watched flag for: %s %s %s %s %s %s' % (type, name, imdb_id, tmdb_id, season, year)
-                       
+
+        if imdb_id:
+            imdb_id = self._valid_imdb_id(imdb_id)
+                                   
         if type == self.type_movie or type == self.type_tvshow or type == self.type_season:
             watched = self._get_watched(type, imdb_id, tmdb_id, season=season)
             if watched == 6:
@@ -1362,7 +1393,7 @@ class MetaData:
             else:
                 self._update_watched(imdb_id, type, 6, tmdb_id=tmdb_id, season=season)       
         elif type == self.type_episode:
-            tvdb_id = self._get_tvdb_id(imdb_id)
+            tvdb_id = self._get_tvdb_id(name, imdb_id)
             if tvdb_id is None:
                 tvdb_id = ''
             tmp_meta = {}
@@ -1498,7 +1529,7 @@ class MetaData:
         return cover_url
     
 
-    def get_seasons(self, imdb_id, seasons):
+    def get_seasons(self, name, imdb_id, seasons):
         '''
         Requests from TVDB a list of images for a given tvshow
         and list of seasons
@@ -1510,16 +1541,14 @@ class MetaData:
         Returns:
             (list) list of covers found for each season
         '''     
-        # add the tt if not found. integer aware.
-        imdb_id=str(imdb_id)
-        if not imdb_id.startswith('tt'):
-                imdb_id = "tt%s" % imdb_id
+        if imdb_id:
+            imdb_id = self._valid_imdb_id(imdb_id)
                 
         coversList = []
-        tvdb_id = self._get_tvdb_id(imdb_id)
+        tvdb_id = self._get_tvdb_id(name, imdb_id)
         images  = None
         for season in seasons:
-            meta = self._cache_lookup_season(imdb_id, season)
+            meta = self._cache_lookup_season(imdb_id, tvdb_id, season)
             if meta is None:
                 meta = {}
                 if tvdb_id is None or tvdb_id == '':
@@ -1537,6 +1566,7 @@ class MetaData:
                 meta['tvdb_id'] = tvdb_id
                 meta['imdb_id'] = imdb_id
                 meta['overlay'] = 6
+                meta['backdrop_url'] = self._get_tvshow_backdrops(imdb_id, tvdb_id)                    
                 
                 self._cache_save_season_meta(meta)
             
@@ -1544,6 +1574,32 @@ class MetaData:
             
         return coversList
 
+
+    def _get_tvshow_backdrops(self, imdb_id, tvdb_id):
+        '''
+        Gets the backdrop_url from tvshow_meta to be included with season & episode meta
+        
+        Args:              
+            imdb_id (str): IMDB ID
+            tvdb_id (str): TVDB ID
+
+        ''' 
+
+        sql_select = "SELECT backdrop_url FROM tvshow_meta WHERE imdb_id = '%s' AND tvdb_id = '%s'" % (imdb_id, tvdb_id)
+        
+        print 'SQL Select: %s' % sql_select
+        try:
+            self.dbcur.execute(sql_select)
+            matchedrow = self.dbcur.fetchone()
+        except Exception, e:
+            print '************* Error attempting to select from tvshow_meta table: %s ' % e
+            pass  
+                    
+        if matchedrow:
+            return dict(matchedrow)['backdrop_url']
+        else:
+            return None
+    
     
     def _get_season_posters(self, tvdb_id, season):
         tvdb = TheTVDB()
@@ -1551,21 +1607,34 @@ class MetaData:
         return images
         
 
-    def _cache_lookup_season(self, imdb_id, season):
+    def _cache_lookup_season(self, imdb_id, tvdb_id, season):
         '''
         Lookup data for a given season in the local cache DB.
         
         Args:
             imdb_id (str): IMDB ID
+            tvdb_id (str): TVDB ID
             season (str): tv show season number, number only no other characters
                         
         Returns:
             (dict) meta data for a match
         '''      
-        print 'Looking up season data in cache db, imdb id: %s season: %s' % (imdb_id, season)
-        self.dbcur.execute("SELECT * FROM season_meta WHERE imdb_id = '%s' AND season ='%s' " 
-                           % ( imdb_id, season ) )
-        matchedrow = self.dbcur.fetchone()
+        
+        print 'Looking up season data in cache db, imdb id: %s tvdb_id: %s season: %s' % (imdb_id, tvdb_id, season)
+        
+        if imdb_id:
+            sql_select = "SELECT a.*, b.backdrop_url FROM season_meta a, tvshow_meta b WHERE a.imdb_id = '%s' AND season ='%s' and a.imdb_id=b.imdb_id and a.tvdb_id=b.tvdb_id"  % (imdb_id, season)
+        elif tvdb_id:
+            sql_select = "SELECT a.*, b.backdrop_url FROM season_meta a, tvshow_meta b WHERE a.tvdb_id = '%s' AND season ='%s'  and a.imdb_id=b.imdb_id and a.tvdb_id=b.tvdb_id"  % (tvdb_id, season)            
+          
+        print 'SQL Select: %s' % sql_select
+        try:
+            self.dbcur.execute(sql_select)
+            matchedrow = self.dbcur.fetchone()
+        except Exception, e:
+            print '************* Error attempting to select from season_meta table: %s ' % e
+            pass 
+                    
         if matchedrow:
             print 'Found season meta information in cache table: ', dict(matchedrow)
             return dict(matchedrow)
