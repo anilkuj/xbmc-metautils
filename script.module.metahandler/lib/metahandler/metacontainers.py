@@ -17,12 +17,14 @@ addon = xbmcaddon.Addon(id='script.module.metahandler')
 path = addon.getAddonInfo('path')
 sys.path.append((os.path.split(path))[0])
 
-try: import xbmc
-except:
-    print 'Not running under xbmc; install container function unavaliable.'
-    xbmc_imported=False
-else:
-    xbmc_imported=True
+'''
+   Use SQLIte3 wherever possible, needed for newer versions of XBMC
+   Keep pysqlite2 for legacy support
+'''
+try: 
+    from sqlite3 import dbapi2 as sqlite
+except: 
+    from pysqlite2 import dbapi2 as sqlite
 
 class MetaContainer:
 
@@ -30,7 +32,41 @@ class MetaContainer:
         #!!!! This must be matched to the path in meteahandler.py MetaData __init__
         self.path = xbmc.translatePath(path)
         self.work_path = os.path.join(self.path, 'work')
+        self.cache_path = os.path.join(self.path,  'meta_cache')
+        self.videocache = os.path.join(self.cache_path, 'video_cache.db')
+        self.work_videocache = os.path.join(self.work_path, 'video_cache.db')
+        self.movie_covers = os.path.join(self.cache_path, 'movie')
+        self.tv_covers = os.path.join(self.cache_path, 'tvshow')        
+        
+        self.table_list = ['movie_meta', 'tvshow_meta', 'season_meta', 'episode_meta']
      
+        print '---------------------------------------------------------------------------------------'
+        #delete and re-create work_path to ensure no previous files are left over
+        if os.path.exists(self.work_path):
+            import shutil
+            try:
+                print 'Removing previous work folder: %s' % self.work_path
+                shutil.rmtree(self.work_path)
+            except Exception, e:
+                print 'Failed to delete work folder: %s' % e
+                pass
+        
+        #Re-Create work folder
+        self.make_dir(self.work_path)
+
+               
+    def get_workpath(self):
+        return self._work_path
+
+
+    def get_cachepath(self):
+        return self._cache_path
+            
+
+    def make_dir(self, mypath):
+        ''' Creates sub-directories if they are not found. '''
+        if not os.path.exists(mypath): os.makedirs(mypath)   
+
    
     def _del_metadir(self, path=path):
         #pass me the path the meta_caches is in
@@ -49,7 +85,8 @@ class MetaContainer:
                 else:
                     print 'deleted old meta'
                     return True
-    
+
+
     def _del_path(self, path):
     
         if os.path.exists(path):
@@ -61,6 +98,7 @@ class MetaContainer:
                 else:
                     print 'deleted old meta'
                     return True
+
     
     def _extract_zip(self, src,dest):
             try:
@@ -70,7 +108,7 @@ class MetaContainer:
                 dest=os.path.normpath(dest) 
     
                 #Unzip
-                xbmc.executebuiltin("XBMC.Extract("+src+","+dest+")")
+                xbmc.executebuiltin("XBMC.Extract("+src+","+dest+")")               
     
             except:
                 print 'Extraction failed!'
@@ -78,35 +116,54 @@ class MetaContainer:
             else:                
                 print 'Extraction success!'
                 return True
-     
-    def install_metadata_container(self, workingdir,containerpath,installtype):
+
+
+    def _insert_metadata(self, table):
+        '''
+        Batch insert records into existing cache DB
+
+        Used to add extra meta packs to existing DB
+        Duplicate key errors are ignored
+        
+        Args:
+            table (str): table name to select from/insert into
+        '''
+
+        print 'Inserting records into table: %s' % table
+        sql_insert = 'INSERT OR IGNORE INTO %s SELECT * FROM work_db.%s' % (table, table)        
+        print 'SQL Insert: %s' % sql_insert
+        print self.work_videocache
+
+        try:
+            dbcon = sqlite.connect(self.videocache)
+            dbcur = dbcon.cursor()
+            dbcur.execute('ATTACH DATABASE "%s" as work_db' % self.work_videocache)
+            dbcur.execute(sql_insert)
+            dbcon.commit()
+        except Exception, e:
+            print '************* Error attempting to insert into table: %s with error: %s' % (table, e)
+            pass
+        dbcur.close()
+        dbcon.close() 
+
+         
+    def install_metadata_container(self, containerpath, installtype):
     
-        #NOTE: This function is handled by higher level functions in the Default.py
+        print 'Attempting to install type: %s  path: %s' % (installtype, containerpath)
 
-        if installtype == 'database' or installtype == 'covers' or installtype == 'backdrops':
+        if installtype=='database':
+            self._extract_zip(containerpath, self.work_path)
+            #Sleep for 5 seconds to ensure DB is unzipped - else insert will fail
+            xbmc.sleep(5000)
+            for table in self.table_list:
+                self._insert_metadata(table)
+                
+        elif installtype=='movie_covers':
+            self._extract_zip(containerpath, self.movie_covers)
 
-            meta_caches=os.path.join(workingdir,'meta_caches')
-            imgspath=os.path.join(meta_caches,dbtype)
-            cachepath=os.path.join(meta_caches,'video_cache.db')
+        elif installtype=='tv_covers':
+            self._extract_zip(containerpath, self.tv_covers)
 
-            if not os.path.exists(meta_caches):
-                #create the meta folders if they do not exist
-                self.make_dirs(workingdir)
-
-            if installtype=='database':
-                #delete old db files
-                try: os.remove(cachepath)
-                except: pass
-
-                #extract the db zip to 'themoviedb' or 'TVDB'
-                self._extract_zip(containerpath,meta_caches)
-
-            if installtype=='covers' or installtype=='backdrops':
-                #delete old folders
-                deleted = self._del_path(os.path.join(imgspath,installtype))
-
-                #extract the covers or backdrops folder zip to 'movie' or 'tv'
-                if deleted == True: self._extract_zip(containerpath,imgspath)
         else:
-            print 'not a valid installtype:',installtype
+            print '********* Not a valid installtype: %s' % installtype
             return False
