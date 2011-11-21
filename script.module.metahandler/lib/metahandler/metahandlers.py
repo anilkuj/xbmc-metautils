@@ -99,7 +99,6 @@ class MetaData:
 
         self.tvpath = make_dir(self.cache_path, self.type_tvshow)
         self.tvcovers = make_dir(self.tvpath, 'covers')
-        self.tvbackdrops = make_dir(self.tvpath, 'backdrops')
 
         self.mvpath = make_dir(self.cache_path, self.type_movie)
         self.mvcovers = make_dir(self.mvpath, 'covers')
@@ -123,7 +122,7 @@ class MetaData:
     def _cache_create_movie_db(self):
         ''' Creates the cache tables if they do not exist.  '''   
                         
-        # split text across lines to make it easier to understand
+        # Create Movie table
         self.dbcur.execute("CREATE TABLE IF NOT EXISTS movie_meta ("
                            "imdb_id TEXT, tmdb_id TEXT, title TEXT, year INTEGER,"
                            "director TEXT, writer TEXT, tagline TEXT, cast TEXT,"
@@ -139,7 +138,7 @@ class MetaData:
         self.dbcur.execute('CREATE INDEX IF NOT EXISTS nameindex on movie_meta (title);')
         print 'Table movie_meta initialized'
         
-        # split text across lines to make it easier to understand
+        # Create TV Show table
         self.dbcur.execute("CREATE TABLE IF NOT EXISTS tvshow_meta ("
                            "imdb_id TEXT, tvdb_id TEXT, title TEXT, cast TEXT,"
                            "rating FLOAT, duration TEXT, plot TEXT,"
@@ -154,11 +153,11 @@ class MetaData:
         self.dbcur.execute('CREATE INDEX IF NOT EXISTS nameindex on tvshow_meta (title);')
         print 'Table tvshow_meta initialized'
 
-        # split text across lines to make it easier to understand
+        # Create Season table
         self.dbcur.execute("CREATE TABLE IF NOT EXISTS season_meta ("
                            "imdb_id TEXT, "
                            "tvdb_id TEXT, " 
-                           "season TEXT, "
+                           "season INTEGER, "
                            "cover_url TEXT,"
                            "overlay INTEGER,"
                            "UNIQUE(imdb_id, tvdb_id, season)"
@@ -168,7 +167,7 @@ class MetaData:
         #self.dbcur.execute('CREATE INDEX IF NOT EXISTS nameindex on tvshow_meta (name);')
         print 'Table season_meta initialized'
                 
-        # split text across lines to make it easier to understand
+        # Create Episode table
         self.dbcur.execute("CREATE TABLE IF NOT EXISTS episode_meta ("
                            "imdb_id TEXT, "
                            "tvdb_id TEXT, "
@@ -188,6 +187,14 @@ class MetaData:
         )
         print 'Table episode_meta initialized'
 
+        # Create Addons table
+        self.dbcur.execute("CREATE TABLE IF NOT EXISTS addons ("
+                           "addon_id TEXT, "
+                           "UNIQUE(addon_id)"
+                           ");"
+        )
+        print 'Table addons initialized'     
+        
 
     def _init_tvshow_meta(self, imdb_id, tvdb_id, name):
         '''
@@ -430,6 +437,68 @@ class MetaData:
             return None
           
 
+    def check_meta_installed(self, addon_id):
+        '''
+        Check if a meta data pack has been installed for a specific addon
+
+        Queries the 'addons' table, if a matching row is found then we can assume the pack has been installed
+        
+        Args:
+            addon_id (str): unique name/id to identify an addon
+                        
+        Returns:
+            BOOL : True if row found, else False
+        '''
+
+        if addon_id:
+            sql_select = "SELECT addon_id FROM addons WHERE addon_id = '%s'" % addon_id
+        else:
+            print 'Invalid addon id'
+            return False
+        
+        print 'Looking up in local cache for addon id: %s' % addon_id
+        print 'SQL Select: %s' % sql_select        
+        try:    
+            self.dbcur.execute(sql_select)
+            matchedrow = self.dbcur.fetchone()            
+        except Exception, e:
+            print '************* Error selecting from cache db: %s' % e
+            return None
+        
+        if matchedrow:
+            print 'Found addon id in cache table: ', dict(matchedrow)
+            return True
+        else:
+            print 'No match in local DB for addon_id: %s' % addon_id
+            return False
+
+
+    def insert_meta_installed(self, addon_id):
+        '''
+        Insert a record into addons table
+
+        Insert a unique addon id AFTER a meta data pack has been installed
+        
+        Args:
+            addon_id (str): unique name/id to identify an addon
+        '''
+
+        if addon_id:
+            sql_insert = "INSERT INTO addons VALUES ('%s')" % addon_id
+        else:
+            print 'Invalid addon id'
+            return
+        
+        print 'Inserting into addons table addon id: %s' % addon_id
+        print 'SQL Insert: %s' % sql_insert        
+        try:    
+            self.dbcur.execute(sql_insert)
+            self.dbcon.commit()            
+        except Exception, e:
+            print '************* Error inserting into cache db: %s' % e
+            return
+        
+
     def get_meta(self, type, name, imdb_id='', tmdb_id='', year=''):
         '''
         Main method to get meta data for movie or tvshow. Will lookup by name/year 
@@ -437,7 +506,7 @@ class MetaData:
         
         Args:
             type (str): 'movie' or 'tvshow'
-            name (int): full name of movie/tvshow you are searching            
+            name (str): full name of movie/tvshow you are searching            
         Kwargs:
             imdb_id (str): IMDB ID        
             tmdb_id (str): TMDB ID
@@ -1061,6 +1130,7 @@ class MetaData:
                 meta['premiered']=meta['premiered']
                 meta = self._get_tv_extra(meta)
                 meta['overlay'] = self._get_watched_episode(meta)
+                meta['backdrop_url'] = ''
                 
                 self._cache_save_episode_meta(meta)
                 
@@ -1077,6 +1147,7 @@ class MetaData:
                     meta['poster'] = ''
                     meta['season'] = 0
                     meta['episode'] = 0
+                    meta['backdrop_url'] = ''                    
             else:
                 meta = {}
                 meta['episode_id'] = ''
@@ -1086,6 +1157,7 @@ class MetaData:
                 meta['poster'] = ''
                 meta['season'] = 0
                 meta['episode'] = 0
+                meta['backdrop_url'] = ''                
                 
             #if meta is not None:
             meta['imdb_id']=imdb_id
@@ -1562,7 +1634,7 @@ class MetaData:
                         images = self._get_season_posters(tvdb_id, season)
                         meta['cover_url']=self._find_cover(season, images )
                         
-                meta['season'] = season
+                meta['season'] = int(season)
                 meta['tvdb_id'] = tvdb_id
                 meta['imdb_id'] = imdb_id
                 meta['overlay'] = 6
@@ -1598,7 +1670,7 @@ class MetaData:
         if matchedrow:
             return dict(matchedrow)['backdrop_url']
         else:
-            return None
+            return ''
     
     
     def _get_season_posters(self, tvdb_id, season):
@@ -1623,9 +1695,9 @@ class MetaData:
         print 'Looking up season data in cache db, imdb id: %s tvdb_id: %s season: %s' % (imdb_id, tvdb_id, season)
         
         if imdb_id:
-            sql_select = "SELECT a.*, b.backdrop_url FROM season_meta a, tvshow_meta b WHERE a.imdb_id = '%s' AND season ='%s' and a.imdb_id=b.imdb_id and a.tvdb_id=b.tvdb_id"  % (imdb_id, season)
+            sql_select = "SELECT a.*, b.backdrop_url FROM season_meta a, tvshow_meta b WHERE a.imdb_id = '%s' AND season =%s and a.imdb_id=b.imdb_id and a.tvdb_id=b.tvdb_id"  % (imdb_id, season)
         elif tvdb_id:
-            sql_select = "SELECT a.*, b.backdrop_url FROM season_meta a, tvshow_meta b WHERE a.tvdb_id = '%s' AND season ='%s'  and a.imdb_id=b.imdb_id and a.tvdb_id=b.tvdb_id"  % (tvdb_id, season)            
+            sql_select = "SELECT a.*, b.backdrop_url FROM season_meta a, tvshow_meta b WHERE a.tvdb_id = '%s' AND season =%s  and a.imdb_id=b.imdb_id and a.tvdb_id=b.tvdb_id"  % (tvdb_id, season)            
           
         print 'SQL Select: %s' % sql_select
         try:
