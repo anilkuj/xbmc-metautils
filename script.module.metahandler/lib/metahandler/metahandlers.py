@@ -99,6 +99,7 @@ class MetaData:
 
         self.tvpath = make_dir(self.cache_path, self.type_tvshow)
         self.tvcovers = make_dir(self.tvpath, 'covers')
+        self.tvbackdrops = make_dir(self.tvpath, 'backdrops')        
 
         self.mvpath = make_dir(self.cache_path, self.type_movie)
         self.mvcovers = make_dir(self.mvpath, 'covers')
@@ -251,7 +252,7 @@ class MetaData:
             
         meta = {}
         meta['imdb_id'] = imdb_id
-        meta['tmdb_id'] = tmdb_id
+        meta['tmdb_id'] = str(tmdb_id)
         meta['title'] = name
         meta['year'] = year
         meta['writer'] = ''
@@ -435,7 +436,15 @@ class MetaData:
             return imdb_id
         else:
             return None
-          
+
+
+    def _remove_none_values(self, meta):
+        ''' Ensure we are not sending back any None values, XBMC doesn't like them '''
+        for item in meta:
+            if meta[item] is None:
+                meta[item] = ''
+        return meta
+                              
 
     def check_meta_installed(self, addon_id):
         '''
@@ -585,7 +594,10 @@ class MetaData:
         
         #We want to send back the name that was passed in   
         meta['title'] = name
-        
+              
+        #Ensure we are not sending back any None values, XBMC doesn't like them
+        meta = self._remove_none_values(meta)
+                
         return meta  
 
 
@@ -873,11 +885,11 @@ class MetaData:
         meta['imdb_id'] = md.get('imdb_id', imdb_id)
         meta['title'] = md.get('name', name)      
         meta['tagline'] = md.get('tagline', '')
-        meta['rating'] = md.get('rating', 0)
+        meta['rating'] = float(md.get('rating', 0))
         meta['duration'] = str(md.get('runtime', 0))
         meta['plot'] = md.get('overview', '')
         meta['mpaa'] = md.get('certification', '')       
-        meta['premiered'] = md.get('released', '')    
+        meta['premiered'] = md.get('released', '')
         
         #Do whatever we can to set a year, if we don't have one lets try to strip it from premiered
         if not year and meta['premiered']:
@@ -1006,7 +1018,7 @@ class MetaData:
                 meta['tvdb_id'] = tvdb_id
                 meta['title'] = show.name
                 if str(show.rating) != '' and show.rating != None:
-                    meta['rating'] = show.rating
+                    meta['rating'] = float(show.rating)
                 meta['duration'] = show.runtime
                 meta['plot'] = show.overview
                 meta['mpaa'] = show.content_rating
@@ -1118,7 +1130,7 @@ class MetaData:
                 meta['episode_id'] = ''                
                 meta['season']=season
                 meta['episode']=episode
-                meta['title']= ''
+                meta['title']= name
                 meta['plot'] = ''
                 meta['director'] = ''
                 meta['writer'] = ''
@@ -1140,6 +1152,9 @@ class MetaData:
                 meta = self._get_tvdb_episode_data(tvdb_id, season, episode, dateSearch)
                 if meta is None:
                     meta = {}
+                    meta['title']= name
+                    meta['director'] = ''
+                    meta['writer'] = ''                    
                     meta['episode_id'] = ''
                     meta['plot'] = ''
                     meta['rating'] = 0
@@ -1150,8 +1165,11 @@ class MetaData:
                     meta['backdrop_url'] = ''                    
             else:
                 meta = {}
+                meta['title']= name
                 meta['episode_id'] = ''
                 meta['plot'] = ''
+                meta['director'] = ''
+                meta['writer'] = ''                
                 meta['rating'] = 0
                 meta['premiered'] = ''
                 meta['poster'] = ''
@@ -1160,6 +1178,7 @@ class MetaData:
                 meta['backdrop_url'] = ''                
                 
             #if meta is not None:
+            meta['title']= name
             meta['imdb_id']=imdb_id
             meta['tvdb_id']=tvdb_id
             meta['season']=int(season)
@@ -1175,6 +1194,9 @@ class MetaData:
         else:
             print 'Episode found on db, meta='+str(meta)
 
+        #Ensure we are not sending back any None values, XBMC doesn't like them
+        meta = self._remove_none_values(meta)
+        
         return meta
   
     
@@ -1190,7 +1212,14 @@ class MetaData:
         Returns:
             DICT containing the extra values
         '''
-        sql_select = "SELECT * FROM tvshow_meta WHERE imdb_id = '%s'" % meta['imdb_id']
+        
+        if meta['imdb_id']:
+            sql_select = "SELECT * FROM tvshow_meta WHERE imdb_id = '%s'" % meta['imdb_id']
+        elif meta['tvdb_id']:
+            sql_select = "SELECT * FROM tvshow_meta WHERE tvdb_id = '%s'" % meta['tvdb_id']
+        else:
+            sql_select = "SELECT * FROM tvshow_meta WHERE title = '%s'" % self._clean_string(meta['title'].lower())
+            
         print 'Retrieving extra TV Show information from tvshow_meta'
         print 'SQL SELECT: %s' % sql_select
         
@@ -1377,16 +1406,25 @@ class MetaData:
             meta (dict): episode data to be stored
                         
         '''      
+        if meta['imdb_id']:
+            sql_select = 'SELECT * FROM episode_meta WHERE imdb_id = "%s" AND season = %s AND episode = %s '  % (meta['imdb_id'], meta['season'], meta['episode'])
+            sql_delete = 'DELETE FROM episode_meta WHERE imdb_id = "%s" AND season = %s AND episode = %s '  % (meta['imdb_id'], meta['season'], meta['episode'])
+        elif meta['tvdb_id']:
+            sql_select = 'SELECT * FROM episode_meta WHERE tvdb_id = "%s" AND season = %s AND episode = %s '  % (meta['tvdb_id'], meta['season'], meta['episode'])
+            sql_delete = 'DELETE FROM episode_meta WHERE tvdb_id = "%s" AND season = %s AND episode = %s '  % (meta['tvdb_id'], meta['season'], meta['episode'])
+        else:         
+            sql_select = 'SELECT * FROM episode_meta WHERE title = "%s" AND season = %s AND episode = %s '  % (self._clean_string(meta['title'].lower()), meta['season'], meta['episode'])
+            sql_delete = 'DELETE FROM episode_meta WHERE title = "%s" AND season = %s AND episode = %s '  % (self._clean_string(meta['title'].lower()), meta['season'], meta['episode'])
+        print 'Saving Episode Meta'
+        print 'SQL Select: %s' % sql_select
+        print 'SQL Delete: %s' % sql_delete
+        
         try: 
-            self.dbcur.execute('SELECT * FROM episode_meta WHERE '
-                               'imdb_id = "%s" AND tvdb_id = "%s" AND season = %s AND episode = %s '
-                               % (meta['imdb_id'], meta['tvdb_id'], meta['season'], meta['episode']) )
+            self.dbcur.execute(sql_select)
             matchedrow = self.dbcur.fetchone()
             if matchedrow:
                     print 'Episode matched row found, deleting table entry'
-                    self.dbcur.execute('DELETE FROM episode_meta WHERE '
-                               'imdb_id = "%s" AND tvdb_id = "%s" AND season = %s AND episode = %s ' 
-                               % (meta['imdb_id'], meta['tvdb_id'], meta['season'], meta['episode']) ) 
+                    self.dbcur.execute(sql_delete) 
         except Exception, e:
             print '************* Error attempting to delete from cache table: %s ' % e
             print 'Meta data:', meta
@@ -1457,15 +1495,16 @@ class MetaData:
 
         if imdb_id:
             imdb_id = self._valid_imdb_id(imdb_id)
-                                   
+
+        tvdb_id = self._get_tvdb_id(name, imdb_id)                                   
+        
         if type == self.type_movie or type == self.type_tvshow or type == self.type_season:
             watched = self._get_watched(type, imdb_id, tmdb_id, season=season)
             if watched == 6:
-                self._update_watched(imdb_id, type, 7, tmdb_id=tmdb_id, season=season)
+                self._update_watched(imdb_id, type, 7, tmdb_id=tmdb_id, season=season, tvdb_id=tvdb_id)
             else:
-                self._update_watched(imdb_id, type, 6, tmdb_id=tmdb_id, season=season)       
+                self._update_watched(imdb_id, type, 6, tmdb_id=tmdb_id, season=season, tvdb_id=tvdb_id)       
         elif type == self.type_episode:
-            tvdb_id = self._get_tvdb_id(name, imdb_id)
             if tvdb_id is None:
                 tvdb_id = ''
             tmp_meta = {}
@@ -1499,13 +1538,19 @@ class MetaData:
             if imdb_id:
                 sql="UPDATE movie_meta SET overlay = %s WHERE imdb_id = '%s'" % (new_value, imdb_id)
             elif tmdb_id:
-                sql="UPDATE movie_meta SET overlay = %s WHERE tmdb_id = '%s'" % (new_value, tmdb_id)            
+                sql="UPDATE movie_meta SET overlay = %s WHERE tmdb_id = '%s'" % (new_value, tmdb_id)
         elif type == self.type_tvshow:
-            sql="UPDATE tvshow_meta SET overlay = %s WHERE imdb_id = '%s'" % (new_value, imdb_id)
+            if imdb_id:
+                sql="UPDATE tvshow_meta SET overlay = %s WHERE imdb_id = '%s'" % (new_value, imdb_id)
+            elif tvdb_id:
+                sql="UPDATE tvshow_meta SET overlay = %s WHERE tvdb_id = '%s'" % (new_value, tvdb_id)
         elif type == self.type_season:
             sql="UPDATE season_meta SET overlay = %s WHERE imdb_id = '%s' AND season = %s" % (new_value, imdb_id, season)        
         elif type == self.type_episode:
-            sql="UPDATE episode_meta SET overlay = %s WHERE imdb_id = '%s' AND tvdb_id = '%s' AND season = %s AND episode = %s" % (new_value, imdb_id, tvdb_id, season, episode)
+            if imdb_id:
+                sql="UPDATE episode_meta SET overlay = %s WHERE imdb_id = '%s' AND season = %s AND episode = %s" % (new_value, imdb_id, season, episode)
+            elif tvdb_id:
+                sql="UPDATE episode_meta SET overlay = %s WHERE tvdb_id = '%s' AND season = %s AND episode = %s" % (new_value, tvdb_id, season, episode)
         else: # Something went really wrong
             return None
 
@@ -1562,8 +1607,14 @@ class MetaData:
         Args:
             meta (dict): full data of episode                    
 
-        '''
-        sql_select = 'SELECT * FROM episode_meta WHERE imdb_id = "%s" AND tvdb_id = "%s" AND season = %s AND episode = %s '  % (meta['imdb_id'], meta['tvdb_id'], meta['season'], meta['episode'])
+        '''       
+        if meta['imdb_id']:
+            sql_select = 'SELECT * FROM episode_meta WHERE imdb_id = "%s" AND season = %s AND episode = %s '  % (meta['imdb_id'], meta['season'], meta['episode'])
+        elif meta['tvdb_id']:
+            sql_select = 'SELECT * FROM episode_meta WHERE tvdb_id = "%s" AND season = %s AND episode = %s '  % (meta['tvdb_id'], meta['season'], meta['episode'])
+        else:         
+            sql_select = 'SELECT * FROM episode_meta WHERE title = "%s" AND season = %s AND episode = %s '  % (self._clean_string(meta['title'].lower()), meta['season'], meta['episode'])
+        print 'Getting episode watched status'
         print 'SQL Select: %s' % sql_select
         try:
             self.dbcur.execute(sql_select)
@@ -1640,10 +1691,13 @@ class MetaData:
                 meta['overlay'] = 6
                 meta['backdrop_url'] = self._get_tvshow_backdrops(imdb_id, tvdb_id)                    
                 
+                #Ensure we are not sending back any None values, XBMC doesn't like them
+                meta = self._remove_none_values(meta)
+                                
                 self._cache_save_season_meta(meta)
             
             coversList.append(meta)
-            
+                   
         return coversList
 
 
