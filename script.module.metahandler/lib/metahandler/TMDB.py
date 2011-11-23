@@ -108,7 +108,7 @@ class TMDB(object):
             return True 
         else:
             try:
-                bad_list = ['', '0.0', '0', 'None', '[]', 'No overview found.', 'TBD', None]
+                bad_list = ['', '0.0', '0', 'None', '[]', 'No overview found.', 'TBD', 'N/A', None]
                 if meta[key] in bad_list:
                     return True
                 else:
@@ -270,6 +270,7 @@ class TMDB(object):
             name (str): full name of movie you are searching            
         Kwargs:
             imdb_id (str): IMDB ID
+            tmdb_id (str): TMDB ID
             year (str): 4 digit year of video, recommended to include the year whenever possible
                         to maximize correct search results.
                         
