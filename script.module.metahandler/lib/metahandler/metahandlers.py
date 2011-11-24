@@ -222,7 +222,7 @@ class MetaData:
         meta['tvdb_id'] = tvdb_id
         meta['title'] = name
         meta['rating'] = 0
-        meta['duration'] = 0
+        meta['duration'] = ''
         meta['plot'] = ''
         meta['mpaa'] = ''
         meta['premiered'] = ''
@@ -267,7 +267,7 @@ class MetaData:
         meta['tagline'] = ''
         meta['cast'] = []
         meta['rating'] = 0
-        meta['duration'] = 0
+        meta['duration'] = ''
         meta['plot'] = ''
         meta['mpaa'] = ''
         meta['premiered'] = ''
@@ -994,7 +994,6 @@ class MetaData:
 
         #Intialize tvshow meta dictionary
         meta = self._init_tvshow_meta(imdb_id, tvdb_id, name)
-        print 'TV META INIT: ', meta
 
         # if not found by imdb, try by name
         if tvdb_id == '':
