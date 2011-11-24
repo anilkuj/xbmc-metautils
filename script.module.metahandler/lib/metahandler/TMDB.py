@@ -168,12 +168,12 @@ class TMDB(object):
         '''        
         print 'Updating current meta with IMDB'
         
-        if self._upd_key(meta, 'overview'):
+        if self._upd_key(meta, 'overview') and self._upd_key(meta, 'plot'):
             print '-- IMDB - Updating Overview'
             if imdb_meta.has_key('Plot'):
                 meta['overview']=imdb_meta['Plot']           
         
-        if self._upd_key(meta, 'released'):
+        if self._upd_key(meta, 'released') and self._upd_key(meta, 'premiered'):
             print '-- IMDB - Updating Premiered'
             
             temp=self._convert_date(imdb_meta['Released'], '%d %b %Y', '%Y-%m-%d')
@@ -205,7 +205,7 @@ class TMDB(object):
             if temp != 'N/A':
                 meta['genre']=temp
                 
-        if self._upd_key(meta, 'runtime'):
+        if self._upd_key(meta, 'runtime') and self._upd_key(meta, 'duration'):
             print '-- IMDB - Updating Runtime'
             temp=imdb_meta['Runtime']
             if temp != 'N/A':
