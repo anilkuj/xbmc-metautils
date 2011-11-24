@@ -24,11 +24,18 @@
 import os
 import re
 import sys
-import xbmc, xbmcaddon
 from datetime import datetime
 import time
 from TMDB import TMDB
 from thetvdbapi import TheTVDB
+
+#necessary so that the metacontainers.py can use the scrapers
+try: import xbmc,xbmcaddon
+except:
+     xbmc_imported = False
+else:
+     xbmc_imported = True
+
 
 ''' Use t0mm0's common library for http calls, corrects unicode problems '''
 from t0mm0.common.net import Net
@@ -987,10 +994,16 @@ class MetaData:
 
         #Intialize tvshow meta dictionary
         meta = self._init_tvshow_meta(imdb_id, tvdb_id, name)
+        print 'TV META INIT: ', meta
 
         # if not found by imdb, try by name
         if tvdb_id == '':
-            show_list=tvdb.get_matching_shows(name)
+            try:
+                show_list=tvdb.get_matching_shows(name)
+            except Exception, e:
+                print '************* Error retreiving from thetvdb.com: %s ' % e     
+                show_list = []
+                pass
             print 'Found TV Show List: ', show_list
             tvdb_id=''
             prob_id=''
@@ -1022,7 +1035,7 @@ class MetaData:
                 meta['duration'] = show.runtime
                 meta['plot'] = show.overview
                 meta['mpaa'] = show.content_rating
-                meta['premiered'] = show.first_aired
+                meta['premiered'] = str(show.first_aired)
                 if show.genre != '':
                     temp = show.genre.replace("|",",")
                     temp = temp[1:(len(temp)-1)]
@@ -1037,12 +1050,22 @@ class MetaData:
                 meta['backdrop_url'] = show.fanart_url
                 meta['overlay'] = 6
 
-                if meta['plot'] == 'None' or meta['plot'] == '' or meta['plot'] == 'TBD' or meta['plot'] == 'No overview found.' or meta['rating'] == 0 or meta['duration'] == 0 or meta['cast'] == '' or meta['cover_url'] == '':
+                if meta['plot'] == 'None' or meta['plot'] == '' or meta['plot'] == 'TBD' or meta['plot'] == 'No overview found.' or meta['rating'] == 0 or meta['duration'] == 0 or meta['cover_url'] == '':
                     print ' Some info missing in TVdb for TVshow *** '+ name + ' ***. Will search imdb for more'                    
                     tmdb = TMDB()
                     imdb_meta = tmdb.search_imdb(name, imdb_id)
                     if imdb_meta:
-                        meta = tmdb.update_imdb_meta(meta, imdb_meta)
+                        imdb_meta = tmdb.update_imdb_meta(meta, imdb_meta)
+                        if imdb_meta.has_key('overview'):
+                            meta['plot'] = imdb_meta['overview']
+                        if imdb_meta.has_key('rating'):
+                            meta['rating'] = imdb_meta['rating']
+                        if imdb_meta.has_key('runtime'):
+                            meta['duration'] = imdb_meta['runtime']
+                        if imdb_meta.has_key('cast'):
+                            meta['cast'] = imdb_meta['cast']
+                        if imdb_meta.has_key('cover_url'):
+                            meta['cover_url'] = imdb_meta['cover_url']
 
                 return meta
             else:
@@ -1178,7 +1201,8 @@ class MetaData:
                 meta['backdrop_url'] = ''                
                 
             #if meta is not None:
-            meta['title']= name
+            if not meta['title']:
+                meta['title']= name
             meta['imdb_id']=imdb_id
             meta['tvdb_id']=tvdb_id
             meta['season']=int(season)
@@ -1478,7 +1502,7 @@ class MetaData:
             pass          
 
 
-    def change_watched(self, type, name, imdb_id, tmdb_id='', season='', episode='', year=''):
+    def change_watched(self, type, name, imdb_id, tmdb_id='', season='', episode='', year='', watched=''):
         '''
         Change watched status on video
         
@@ -1491,7 +1515,7 @@ class MetaData:
                         
         '''   
         print '---------------------------------------------------------------------------------------'
-        print 'Updating watched flag for: %s %s %s %s %s %s' % (type, name, imdb_id, tmdb_id, season, year)
+        print 'Updating watched flag for: %s %s %s %s %s %s %s' % (type, name, imdb_id, tmdb_id, season, episode, year)
 
         if imdb_id:
             imdb_id = self._valid_imdb_id(imdb_id)
@@ -1499,11 +1523,13 @@ class MetaData:
         tvdb_id = self._get_tvdb_id(name, imdb_id)                                   
         
         if type == self.type_movie or type == self.type_tvshow or type == self.type_season:
-            watched = self._get_watched(type, imdb_id, tmdb_id, season=season)
-            if watched == 6:
-                self._update_watched(imdb_id, type, 7, tmdb_id=tmdb_id, season=season, tvdb_id=tvdb_id)
-            else:
-                self._update_watched(imdb_id, type, 6, tmdb_id=tmdb_id, season=season, tvdb_id=tvdb_id)       
+            if not watched:
+                watched = self._get_watched(type, imdb_id, tmdb_id, season=season)
+                if watched == 6:
+                    watched = 7
+                else:
+                    watched = 6
+            self._update_watched(imdb_id, type, watched, tmdb_id=tmdb_id, season=season, tvdb_id=tvdb_id)                
         elif type == self.type_episode:
             if tvdb_id is None:
                 tvdb_id = ''
@@ -1513,11 +1539,14 @@ class MetaData:
             tmp_meta['title'] = name
             tmp_meta['season']  = season
             tmp_meta['episode'] = episode
-            watched = self._get_watched_episode(tmp_meta)
-            if watched == 6:
-                self._update_watched(imdb_id, type, 7, name=name, season=season, episode=episode, tvdb_id=tvdb_id)
-            else:
-                self._update_watched(imdb_id, type, 6, name=name, season=season, episode=episode, tvdb_id=tvdb_id)
+            
+            if not watched:
+                watched = self._get_watched_episode(tmp_meta)
+                if watched == 6:
+                    watched = 7
+                else:
+                    watched = 6
+            self._update_watched(imdb_id, type, watched, name=name, season=season, episode=episode, tvdb_id=tvdb_id)
                 
     
     def _update_watched(self, imdb_id, type, new_value, tmdb_id='', name='', season='', episode='', tvdb_id=''):
