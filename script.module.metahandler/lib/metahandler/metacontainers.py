@@ -10,7 +10,13 @@ currently very specific to icefilms.info
 
 import os,sys
 import shutil
-import xbmc,xbmcaddon
+
+#necessary so that the metacontainers.py can use the scrapers
+try: import xbmc,xbmcaddon
+except:
+     xbmc_imported = False
+else:
+     xbmc_imported = True
 
 #append lib directory
 addon = xbmcaddon.Addon(id='script.module.metahandler')
