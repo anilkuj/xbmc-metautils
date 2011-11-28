@@ -198,6 +198,8 @@ class MetaData:
         # Create Addons table
         self.dbcur.execute("CREATE TABLE IF NOT EXISTS addons ("
                            "addon_id TEXT, "
+                           "covers_installed TEXT, "
+                           "backdrops_installed TEXT, "
                            "UNIQUE(addon_id)"
                            ");"
         )
@@ -241,7 +243,7 @@ class MetaData:
         return meta
 
 
-    def _init_movie_meta(self, imdb_id, tmdb_id, name, year):
+    def _init_movie_meta(self, imdb_id, tmdb_id, name, year=0):
         '''
         Initializes a movie_meta dictionary with default values, to ensure we always
         have all fields
@@ -254,14 +256,17 @@ class MetaData:
         Returns:
             DICT in the structure of what is required to write to the DB
         '''                
+        
         if year:
-            year = int(year)
+            int(year)
+        else:
+            year = 0
             
         meta = {}
         meta['imdb_id'] = imdb_id
         meta['tmdb_id'] = str(tmdb_id)
         meta['title'] = name
-        meta['year'] = year
+        meta['year'] = int(year)
         meta['writer'] = ''
         meta['director'] = ''
         meta['tagline'] = ''
@@ -357,37 +362,21 @@ class MetaData:
         return year + '-' + month + '-' + day   
     
     
-    def _downloadimages(self,meta,mediatype,name):
+    def _downloadimages(self, url, path, name):
         '''
         Download images to save locally
         
         Args:
-            meta (dict): meta data dict
-            mediatype (str): 'movies' or 'tvshow'
-            name (str): filename to download
+            url (str): picture url
+            path (str): destination path
+            name (str): filename
         '''                 
-        
-
-        if mediatype==self.type_movie:
-             cover_folder=os.path.join(self.mvcovers, name)
-             backdrop_folder=os.path.join(self.mvbackdrops, name)
-        elif mediatype==self.type_tvshow:
-             cover_folder = os.path.join(self.tvcovers, name)
-             backdrop_folder=os.path.join(self.tvbackdrops, name)
-
     
-        if not os.path.exists(cover_folder):
-            os.makedirs(cover_folder)
-
-        cover_name=self._picname(meta['cover_url'])
-        cover_path = os.path.join(cover_folder, cover_name)
-
-        self._dl_code(meta['cover_url'],cover_path)
+        if not os.path.exists(path):
+            os.makedirs(path)
         
-        backdrop_name=self._picname(meta['backdrop_url'])
-        backdrop_path = os.path.join(backdrop_folder, backdrop_name)
-      
-        self._dl_code(meta['backdrop_url'],backdrop_path)              
+        full_path = os.path.join(path, name)
+        self._dl_code(url, full_path)              
 
 
     def _picname(self,url):
@@ -409,7 +398,7 @@ class MetaData:
         
         Args:
             url (str): url of image to download
-            mypath (str): local path to save image to                       
+            mypath (str): local path to save image to
         '''        
         print 'Attempting to download image from url: %s ' % url
         print 'Saving to destination: %s ' % mypath
@@ -449,7 +438,7 @@ class MetaData:
         ''' Ensure we are not sending back any None values, XBMC doesn't like them '''
         for item in meta:
             if meta[item] is None:
-                meta[item] = ''
+                meta[item] = ''            
         return meta
                               
 
@@ -463,11 +452,11 @@ class MetaData:
             addon_id (str): unique name/id to identify an addon
                         
         Returns:
-            BOOL : True if row found, else False
+            matchedrow (dict) : matched row from addon table
         '''
 
         if addon_id:
-            sql_select = "SELECT addon_id FROM addons WHERE addon_id = '%s'" % addon_id
+            sql_select = "SELECT * FROM addons WHERE addon_id = '%s'" % addon_id
         else:
             print 'Invalid addon id'
             return False
@@ -483,13 +472,13 @@ class MetaData:
         
         if matchedrow:
             print 'Found addon id in cache table: ', dict(matchedrow)
-            return True
+            return dict(matchedrow)
         else:
             print 'No match in local DB for addon_id: %s' % addon_id
             return False
 
 
-    def insert_meta_installed(self, addon_id):
+    def insert_meta_installed(self, addon_id, covers='false', backdrops='false'):
         '''
         Insert a record into addons table
 
@@ -497,10 +486,13 @@ class MetaData:
         
         Args:
             addon_id (str): unique name/id to identify an addon
+        Kwargs:
+            covers (str): true/false if covers has been downloaded/installed
+            backdrops (str): true/false if backdrops has been downloaded/installed
         '''
 
         if addon_id:
-            sql_insert = "INSERT INTO addons VALUES ('%s')" % addon_id
+            sql_insert = "INSERT INTO addons(addon_id, covers_installed, backdrops_installed) VALUES (?,?,?)"
         else:
             print 'Invalid addon id'
             return
@@ -508,12 +500,47 @@ class MetaData:
         print 'Inserting into addons table addon id: %s' % addon_id
         print 'SQL Insert: %s' % sql_insert        
         try:    
-            self.dbcur.execute(sql_insert)
+            self.dbcur.execute(sql_insert, (addon_id, covers, backdrops))
             self.dbcon.commit()            
         except Exception, e:
             print '************* Error inserting into cache db: %s' % e
             return
+
+
+    def update_meta_installed(self, addon_id, covers=False, backdrops=False):
+        '''
+        Update a record into addons table
+
+        Insert a unique addon id AFTER a meta data pack has been installed
         
+        Args:
+            addon_id (str): unique name/id to identify an addon
+        Kwargs:
+            covers (str): true/false if covers has been downloaded/installed
+            backdrops (str): true/false if backdrops has been downloaded/installed
+        '''
+
+        if addon_id:
+            if covers:
+                sql_update = "UPDATE addons SET covers_installed = '%s'" % covers
+            elif backdrops:
+                sql_update = "UPDATE addons SET backdrops_installed = '%s'" % backdrops
+            else:
+                print 'No update field specified'
+                return
+        else:
+            print 'Invalid addon id'
+            return
+        
+        print 'Updating addons table addon id: %s covers: %s backdrops: %s' % (addon_id, covers, backdrops)
+        print 'SQL Update: %s' % sql_insert        
+        try:    
+            self.dbcur.execute(sql_update)
+            self.dbcon.commit()            
+        except Exception, e:
+            print '************* Error updating cache db: %s' % e
+            return
+                    
 
     def get_meta(self, type, name, imdb_id='', tmdb_id='', year=''):
         '''
@@ -555,56 +582,49 @@ class MetaData:
                        
             self._cache_save_video_meta(meta, name, type)
 
-            #if creating a metadata container, download the images.
-            if self.classmode == 'true':
-                self._downloadimages(meta,type,imdb_id)
-
-        if meta:
-
-            #Change cast back into a tuple
-            if meta['cast']:
-                meta['cast'] = eval(meta['cast'])
-                
-            #Return a trailer link that will play via youtube addon
-            try:
-                trailer_id = re.match('^[^v]+v=(.{3,11}).*', meta['trailer_url']).group(1)
-                meta['trailer'] = 'plugin://plugin.video.youtube/?action=play_video&videoid=%s' % trailer_id
-            except:
-                meta['trailer'] = ''
-            
-            #if cache row says there are pre-packed images then either use them or create them
-            if meta['imgs_prepacked'] == 'true':
-
-                    #define the image paths
-                    if type == self.type_movie:
-                        cover_path = os.path.join(self.mvcovers, imdb_id, self._picname(meta['cover_url']))
-                        backdrop_path=os.path.join(self.mvbackdrops,imdb_id,self._picname(meta['backdrop_url']))
-                    elif type == self.type_tvshow:
-                        cover_path = os.path.join(self.tvcovers, imdb_id, self._picname(meta['cover_url']))
-                        backdrop_path=os.path.join(self.tvbackdrops,imdb_id,self._picname(meta['backdrop_url']))
-                    
-
-                    #if paths exist, replace the urls with paths
-                    if self.classmode == 'false':
-                        if os.path.exists(cover_path):
-                            meta['cover_url'] = cover_path
-                        if os.path.exists(backdrop_path):
-                            meta['backdrop_url'] = backdrop_path
-
-                    #try some image redownloads if building container
-                    elif self.classmode == 'true':
-                        if not os.path.exists(cover_path):
-                                self._downloadimages(meta,type,imdb_id)
-
-                        if not os.path.exists(backdrop_path):
-                                self._downloadimages(meta,'movies',imdb_id)
-        
         #We want to send back the name that was passed in   
         meta['title'] = name
               
+        #Change cast back into a tuple
+        if meta['cast']:
+            meta['cast'] = eval(meta['cast'])
+            
+        #Return a trailer link that will play via youtube addon
+        try:
+            trailer_id = re.match('^[^v]+v=(.{3,11}).*', meta['trailer_url']).group(1)
+            meta['trailer'] = 'plugin://plugin.video.youtube/?action=play_video&videoid=%s' % trailer_id
+        except:
+            meta['trailer'] = ''
+        
         #Ensure we are not sending back any None values, XBMC doesn't like them
         meta = self._remove_none_values(meta)
+        
+        #if cache row says there are pre-packed images then either use them or create them
+        if meta['imgs_prepacked'] == 'true':
+
+                #define the image paths               
+                if type == self.type_movie:
+                    root_covers = self.mvcovers
+                    root_backdrops = self.mvbackdrops
+                elif type == self.type_tvshow:
+                    root_covers = self.tvcovers
+                    root_backdrops = self.tvbackdrops
                 
+                if meta['cover_url']:
+                    cover_name = self._picname(meta['cover_url'])
+                    cover_path = os.path.join(root_covers, cover_name[0])
+                    if self.classmode == 'true':
+                        self._downloadimages(meta['cover_url'], cover_path, cover_name)
+                    meta['cover_url'] = os.path.join(cover_path, cover_name)
+                
+                if meta['backdrop_url']:
+                    backdrop_name = self._picname(meta['backdrop_url'])
+                    backdrop_path=os.path.join(root_backdrops, backdrop_name[0])
+                    if self.classmode == 'true':
+                        self._downloadimages(meta['backdrop_url'], backdrop_path, backdrop_name)
+                    meta['backdrop_url'] = os.path.join(backdrop_path, backdrop_name)
+        
+        print 'Returned Meta:', meta       
         return meta  
 
 
@@ -1519,16 +1539,18 @@ class MetaData:
         if imdb_id:
             imdb_id = self._valid_imdb_id(imdb_id)
 
-        tvdb_id = self._get_tvdb_id(name, imdb_id)                                   
+        tvdb_id = ''
+        if type in (self.type_tvshow, self.type_season):
+            tvdb_id = self._get_tvdb_id(name, imdb_id)                                  
         
-        if type == self.type_movie or type == self.type_tvshow or type == self.type_season:
+        if type in (self.type_movie, self.type_tvshow, self.type_season):
             if not watched:
                 watched = self._get_watched(type, imdb_id, tmdb_id, season=season)
                 if watched == 6:
                     watched = 7
                 else:
                     watched = 6
-            self._update_watched(imdb_id, type, watched, tmdb_id=tmdb_id, season=season, tvdb_id=tvdb_id)                
+            self._update_watched(imdb_id, type, watched, tmdb_id=tmdb_id, name=self._clean_string(name.lower()), year=year, season=season, tvdb_id=tvdb_id)                
         elif type == self.type_episode:
             if tvdb_id is None:
                 tvdb_id = ''
@@ -1548,7 +1570,7 @@ class MetaData:
             self._update_watched(imdb_id, type, watched, name=name, season=season, episode=episode, tvdb_id=tvdb_id)
                 
     
-    def _update_watched(self, imdb_id, type, new_value, tmdb_id='', name='', season='', episode='', tvdb_id=''):
+    def _update_watched(self, imdb_id, type, new_value, tmdb_id='', name='', year='', season='', episode='', tvdb_id=''):
         '''
         Commits the DB update for the watched status
         
@@ -1564,28 +1586,32 @@ class MetaData:
         '''      
         if type == self.type_movie:
             if imdb_id:
-                sql="UPDATE movie_meta SET overlay = %s WHERE imdb_id = '%s'" % (new_value, imdb_id)
+                sql_update="UPDATE movie_meta SET overlay = %s WHERE imdb_id = '%s'" % (new_value, imdb_id)
             elif tmdb_id:
-                sql="UPDATE movie_meta SET overlay = %s WHERE tmdb_id = '%s'" % (new_value, tmdb_id)
+                sql_update="UPDATE movie_meta SET overlay = %s WHERE tmdb_id = '%s'" % (new_value, tmdb_id)
+            else:
+                sql_update="UPDATE movie_meta SET overlay = %s WHERE title = '%s'" % (new_value, name)
+                if year:
+                    sql_update = sql_update + ' AND year=%s' % year
         elif type == self.type_tvshow:
             if imdb_id:
-                sql="UPDATE tvshow_meta SET overlay = %s WHERE imdb_id = '%s'" % (new_value, imdb_id)
+                sql_update="UPDATE tvshow_meta SET overlay = %s WHERE imdb_id = '%s'" % (new_value, imdb_id)
             elif tvdb_id:
-                sql="UPDATE tvshow_meta SET overlay = %s WHERE tvdb_id = '%s'" % (new_value, tvdb_id)
+                sql_update="UPDATE tvshow_meta SET overlay = %s WHERE tvdb_id = '%s'" % (new_value, tvdb_id)
         elif type == self.type_season:
-            sql="UPDATE season_meta SET overlay = %s WHERE imdb_id = '%s' AND season = %s" % (new_value, imdb_id, season)        
+            sql_update="UPDATE season_meta SET overlay = %s WHERE imdb_id = '%s' AND season = %s" % (new_value, imdb_id, season)        
         elif type == self.type_episode:
             if imdb_id:
-                sql="UPDATE episode_meta SET overlay = %s WHERE imdb_id = '%s' AND season = %s AND episode = %s" % (new_value, imdb_id, season, episode)
+                sql_update="UPDATE episode_meta SET overlay = %s WHERE imdb_id = '%s' AND season = %s AND episode = %s" % (new_value, imdb_id, season, episode)
             elif tvdb_id:
-                sql="UPDATE episode_meta SET overlay = %s WHERE tvdb_id = '%s' AND season = %s AND episode = %s" % (new_value, tvdb_id, season, episode)
+                sql_update="UPDATE episode_meta SET overlay = %s WHERE tvdb_id = '%s' AND season = %s AND episode = %s" % (new_value, tvdb_id, season, episode)
         else: # Something went really wrong
             return None
 
         print 'Updating watched status for type: %s, imdb id: %s, tmdb_id: %s, new value: %s' % (type, imdb_id, tmdb_id, new_value)
-        print 'SQL UPDATE: %s' % sql        
+        print 'SQL UPDATE: %s' % sql_update        
         try:
-            self.dbcur.execute(sql)
+            self.dbcur.execute(sql_update)
             self.dbcon.commit()
         except Exception, e:
             print '************* Error attempting to update table: %s ' % e
