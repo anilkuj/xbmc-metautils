@@ -198,8 +198,9 @@ class MetaData:
         # Create Addons table
         self.dbcur.execute("CREATE TABLE IF NOT EXISTS addons ("
                            "addon_id TEXT, "
-                           "covers_installed TEXT, "
-                           "backdrops_installed TEXT, "
+                           "covers TEXT, "
+                           "movie_backdrops TEXT, "
+                           "tv_backdrops TEXT, "                           
                            "UNIQUE(addon_id)"
                            ");"
         )
@@ -478,7 +479,7 @@ class MetaData:
             return False
 
 
-    def insert_meta_installed(self, addon_id, covers='false', backdrops='false'):
+    def insert_meta_installed(self, addon_id, covers='false', movie_backdrops='false', tv_backdrops='false'):
         '''
         Insert a record into addons table
 
@@ -492,7 +493,7 @@ class MetaData:
         '''
 
         if addon_id:
-            sql_insert = "INSERT INTO addons(addon_id, covers_installed, backdrops_installed) VALUES (?,?,?)"
+            sql_insert = "INSERT INTO addons(addon_id, covers, movie_backdrops, tv_backdrops) VALUES (?,?,?,?)"
         else:
             print 'Invalid addon id'
             return
@@ -500,14 +501,14 @@ class MetaData:
         print 'Inserting into addons table addon id: %s' % addon_id
         print 'SQL Insert: %s' % sql_insert        
         try:    
-            self.dbcur.execute(sql_insert, (addon_id, covers, backdrops))
+            self.dbcur.execute(sql_insert, (addon_id, covers, movie_backdrops, tv_backdrops))
             self.dbcon.commit()            
         except Exception, e:
             print '************* Error inserting into cache db: %s' % e
             return
 
 
-    def update_meta_installed(self, addon_id, covers=False, backdrops=False):
+    def update_meta_installed(self, addon_id, covers=False, movie_backdrops=False, tv_backdrops=False):
         '''
         Update a record into addons table
 
@@ -517,14 +518,17 @@ class MetaData:
             addon_id (str): unique name/id to identify an addon
         Kwargs:
             covers (str): true/false if covers has been downloaded/installed
-            backdrops (str): true/false if backdrops has been downloaded/installed
+            movie_backdrops (str): true/false if movie backdrops has been downloaded/installed
+            tv_backdrops (str): true/false if tv backdrops has been downloaded/installed            
         '''
 
         if addon_id:
             if covers:
-                sql_update = "UPDATE addons SET covers_installed = '%s'" % covers
-            elif backdrops:
-                sql_update = "UPDATE addons SET backdrops_installed = '%s'" % backdrops
+                sql_update = "UPDATE addons SET covers = '%s'" % covers
+            elif movie_backdrops:
+                sql_update = "UPDATE addons SET movie_backdrops = '%s'" % movie_backdrops
+            elif tv_backdrops:
+                sql_update = "UPDATE addons SET tv_backdrops = '%s'" % tv_backdrops
             else:
                 print 'No update field specified'
                 return
@@ -624,7 +628,7 @@ class MetaData:
                         self._downloadimages(meta['backdrop_url'], backdrop_path, backdrop_name)
                     meta['backdrop_url'] = os.path.join(backdrop_path, backdrop_name)
         
-        print 'Returned Meta:', meta       
+        print 'Returned Meta:', meta
         return meta  
 
 
