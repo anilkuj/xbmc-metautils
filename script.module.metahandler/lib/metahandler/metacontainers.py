@@ -41,8 +41,8 @@ class MetaContainer:
         self.cache_path = os.path.join(self.path,  'meta_cache')
         self.videocache = os.path.join(self.cache_path, 'video_cache.db')
         self.work_videocache = os.path.join(self.work_path, 'video_cache.db')
-        self.movie_covers = os.path.join(self.cache_path, 'movie')
-        self.tv_covers = os.path.join(self.cache_path, 'tvshow')        
+        self.movie_images = os.path.join(self.cache_path, 'movie')
+        self.tv_images = os.path.join(self.cache_path, 'tvshow')        
         
         self.table_list = ['movie_meta', 'tvshow_meta', 'season_meta', 'episode_meta']
      
@@ -164,11 +164,11 @@ class MetaContainer:
             for table in self.table_list:
                 self._insert_metadata(table)
                 
-        elif installtype=='movie_covers':
-            self._extract_zip(containerpath, self.movie_covers)
+        elif installtype=='movie_images':
+            self._extract_zip(containerpath, self.movie_images)
 
-        elif installtype=='tv_covers':
-            self._extract_zip(containerpath, self.tv_covers)
+        elif installtype=='tv_images':
+            self._extract_zip(containerpath, self.tv_images)
 
         else:
             print '********* Not a valid installtype: %s' % installtype
