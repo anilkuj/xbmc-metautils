@@ -48,8 +48,10 @@ net = Net()
 '''
 try: 
     from sqlite3 import dbapi2 as sqlite
+    print 'Loading sqlite3 as DB engine'
 except: 
     from pysqlite2 import dbapi2 as sqlite
+    print 'Loading pysqlite2 as DB engine'
 
 addon = xbmcaddon.Addon(id='script.module.metahandler')
 path = addon.getAddonInfo('path')
@@ -536,11 +538,11 @@ class MetaData:
             print 'Invalid addon id'
             return
         
-        print 'Updating addons table addon id: %s covers: %s backdrops: %s' % (addon_id, covers, backdrops)
-        print 'SQL Update: %s' % sql_insert        
+        print 'Updating addons table addon id: %s covers: %s movie_backdrops: %s tv_backdrops: %s' % (addon_id, covers, movie_backdrops, tv_backdrops)
+        print 'SQL Update: %s' % sql_update
         try:    
             self.dbcur.execute(sql_update)
-            self.dbcon.commit()            
+            self.dbcon.commit()
         except Exception, e:
             print '************* Error updating cache db: %s' % e
             return
