@@ -12,7 +12,7 @@ import os,sys
 import shutil
 
 #necessary so that the metacontainers.py can use the scrapers
-try: import xbmc,xbmcaddon
+try: import xbmc,xbmcaddon,xbmcgui
 except:
      xbmc_imported = False
 else:
@@ -29,8 +29,10 @@ sys.path.append((os.path.split(path))[0])
 '''
 try: 
     from sqlite3 import dbapi2 as sqlite
+    print 'Loading sqlite3 as DB engine'
 except: 
     from pysqlite2 import dbapi2 as sqlite
+    print 'Loading pysqlite2 as DB engine'
 
 class MetaContainer:
 
@@ -106,15 +108,19 @@ class MetaContainer:
                     return True
 
     
-    def _extract_zip(self, src,dest):
+    def _extract_zip(self, src, dest):
             try:
                 print 'Extracting '+str(src)+' to '+str(dest)
                 #make sure there are no double slashes in paths
                 src=os.path.normpath(src)
                 dest=os.path.normpath(dest) 
     
-                #Unzip
-                xbmc.executebuiltin("XBMC.Extract("+src+","+dest+")")               
+                #Unzip - Only if file size is > 1KB
+                if os.path.getsize(src) < 10000:
+                    xbmc.executebuiltin("XBMC.Extract("+src+","+dest+")")
+                else:
+                    print '************* Error: File size is too small'
+                    return False
     
             except:
                 print 'Extraction failed!'
@@ -149,8 +155,10 @@ class MetaContainer:
         except Exception, e:
             print '************* Error attempting to insert into table: %s with error: %s' % (table, e)
             pass
+            return False
         dbcur.close()
         dbcon.close() 
+        return True
 
          
     def install_metadata_container(self, containerpath, installtype):
@@ -158,17 +166,20 @@ class MetaContainer:
         print 'Attempting to install type: %s  path: %s' % (installtype, containerpath)
 
         if installtype=='database':
-            self._extract_zip(containerpath, self.work_path)
+            extract = self._extract_zip(containerpath, self.work_path)
             #Sleep for 5 seconds to ensure DB is unzipped - else insert will fail
             xbmc.sleep(5000)
             for table in self.table_list:
-                self._insert_metadata(table)
+                install = self._insert_metadata(table)
+            
+            if extract and install:
+                return True
                 
         elif installtype=='movie_images':
-            self._extract_zip(containerpath, self.movie_images)
+            return self._extract_zip(containerpath, self.movie_images)
 
         elif installtype=='tv_images':
-            self._extract_zip(containerpath, self.tv_images)
+            return self._extract_zip(containerpath, self.tv_images)
 
         else:
             print '********* Not a valid installtype: %s' % installtype
