@@ -33,7 +33,7 @@ def add_video(meta, type):
     if type == 'movie':
         contextMenuItems = add_contextmenu(watched_mark, meta['title'], type, meta['imdb_id'], meta['tmdb_id'], meta['year'])
         addon.add_video_item({'url': 'none', 'video_type': type}, meta, contextMenuItems, img=meta['cover_url'], fanart=meta['backdrop_url'])    
-    if type == 'tvshow' or 'episode':
+    elif type == 'tvshow' or 'episode':
         contextMenuItems = add_contextmenu(watched_mark, meta['title'], type, imdb_id)    
         addon.add_video_item({'url': 'none', 'video_type': type}, meta, contextMenuItems, img=meta['cover_url'], fanart=meta['backdrop_url'])    
 
@@ -41,6 +41,9 @@ def add_video(meta, type):
 if mode == 'main':
        
     metaget=metahandlers.MetaData()
+    
+    if not metaget.check_meta_installed('plugin.video.meta.tester'):
+        metaget.insert_meta_installed('plugin.video.meta.tester', 'Dec 2011')
     
     #Search by IMDB ID   
     meta = metaget.get_meta('movie','The Hangover',imdb_id='tt1119646')
