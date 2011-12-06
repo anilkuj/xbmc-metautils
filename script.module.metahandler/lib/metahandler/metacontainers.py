@@ -29,10 +29,10 @@ sys.path.append((os.path.split(path))[0])
 '''
 try: 
     from sqlite3 import dbapi2 as sqlite
-    print 'Loading sqlite3 as DB engine'
+    print 'Metacontainers - Loading sqlite3 as DB engine'
 except: 
     from pysqlite2 import dbapi2 as sqlite
-    print 'Loading pysqlite2 as DB engine'
+    print 'Metacontainers - pysqlite2 as DB engine'
 
 class MetaContainer:
 
@@ -116,7 +116,7 @@ class MetaContainer:
                 dest=os.path.normpath(dest) 
     
                 #Unzip - Only if file size is > 1KB
-                if os.path.getsize(src) < 10000:
+                if os.path.getsize(src) > 10000:
                     xbmc.executebuiltin("XBMC.Extract("+src+","+dest+")")
                 else:
                     print '************* Error: File size is too small'
