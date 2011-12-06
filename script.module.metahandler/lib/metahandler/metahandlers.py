@@ -48,10 +48,10 @@ net = Net()
 '''
 try: 
     from sqlite3 import dbapi2 as sqlite
-    print 'Loading sqlite3 as DB engine'
+    print 'Metahandlers - Loading sqlite3 as DB engine'
 except: 
     from pysqlite2 import dbapi2 as sqlite
-    print 'Loading pysqlite2 as DB engine'
+    print 'Metahandlers - Loading pysqlite2 as DB engine'
 
 addon = xbmcaddon.Addon(id='script.module.metahandler')
 path = addon.getAddonInfo('path')
@@ -200,9 +200,11 @@ class MetaData:
         # Create Addons table
         self.dbcur.execute("CREATE TABLE IF NOT EXISTS addons ("
                            "addon_id TEXT, "
-                           "covers TEXT, "
+                           "movie_covers TEXT, "
+                           "tv_covers TEXT, "
                            "movie_backdrops TEXT, "
-                           "tv_backdrops TEXT, "                           
+                           "tv_backdrops TEXT, "
+                           "last_update TEXT, "
                            "UNIQUE(addon_id)"
                            ");"
         )
@@ -319,12 +321,12 @@ class MetaData:
         ''' Helper method to convert a string date to a given format '''
         
         #Legacy check, Python 2.4 does not have strptime attribute, instroduced in 2.5
-        #if hasattr(datetime, 'strptime'):
-        #    strptime = datetime.strptime
-        #else:
-        #    strptime = lambda date_string, format: datetime(*(time.strptime(date_string, format)[0:6]))
+        if hasattr(datetime, 'strptime'):
+            strptime = datetime.strptime
+        else:
+            strptime = lambda date_string, format: datetime(*(time.strptime(date_string, format)[0:6]))
         
-        strptime = lambda date_string, format: datetime(*(time.strptime(date_string, format)[0:6]))
+        #strptime = lambda date_string, format: datetime(*(time.strptime(date_string, format)[0:6]))
         try:
             a = strptime(string, in_format).strftime(out_format)
         except Exception, e:
@@ -481,7 +483,7 @@ class MetaData:
             return False
 
 
-    def insert_meta_installed(self, addon_id, covers='false', movie_backdrops='false', tv_backdrops='false'):
+    def insert_meta_installed(self, addon_id, last_update, movie_covers='false', tv_covers='false', movie_backdrops='false', tv_backdrops='false'):
         '''
         Insert a record into addons table
 
@@ -489,13 +491,16 @@ class MetaData:
         
         Args:
             addon_id (str): unique name/id to identify an addon
+            last_update (str): date of last meta pack installed - use to check to install meta updates
         Kwargs:
-            covers (str): true/false if covers has been downloaded/installed
-            backdrops (str): true/false if backdrops has been downloaded/installed
+            movie_covers (str): true/false if movie covers has been downloaded/installed
+            tv_covers (str): true/false if tv covers has been downloaded/installed            
+            movie_backdrops (str): true/false if movie backdrops has been downloaded/installed
+            tv_backdrops (str): true/false if tv backdrops has been downloaded/installed
         '''
 
         if addon_id:
-            sql_insert = "INSERT INTO addons(addon_id, covers, movie_backdrops, tv_backdrops) VALUES (?,?,?,?)"
+            sql_insert = "INSERT INTO addons(addon_id, movie_covers, tv_covers, movie_backdrops, tv_backdrops, last_update) VALUES (?,?,?,?,?,?)"
         else:
             print 'Invalid addon id'
             return
@@ -503,14 +508,14 @@ class MetaData:
         print 'Inserting into addons table addon id: %s' % addon_id
         print 'SQL Insert: %s' % sql_insert        
         try:    
-            self.dbcur.execute(sql_insert, (addon_id, covers, movie_backdrops, tv_backdrops))
+            self.dbcur.execute(sql_insert, (addon_id, movie_covers, tv_covers, movie_backdrops, tv_backdrops, last_update))
             self.dbcon.commit()            
         except Exception, e:
             print '************* Error inserting into cache db: %s' % e
             return
 
 
-    def update_meta_installed(self, addon_id, covers=False, movie_backdrops=False, tv_backdrops=False):
+    def update_meta_installed(self, addon_id, movie_covers=False, tv_covers=False, movie_backdrops=False, tv_backdrops=False, last_update=False):
         '''
         Update a record into addons table
 
@@ -519,18 +524,23 @@ class MetaData:
         Args:
             addon_id (str): unique name/id to identify an addon
         Kwargs:
-            covers (str): true/false if covers has been downloaded/installed
+            movie_covers (str): true/false if movie covers has been downloaded/installed
+            tv_covers (str): true/false if tv covers has been downloaded/installed
             movie_backdrops (str): true/false if movie backdrops has been downloaded/installed
             tv_backdrops (str): true/false if tv backdrops has been downloaded/installed            
         '''
 
         if addon_id:
-            if covers:
-                sql_update = "UPDATE addons SET covers = '%s'" % covers
+            if movie_covers:
+                sql_update = "UPDATE addons SET movie_covers = '%s'" % movie_covers
+            elif tv_covers:
+                sql_update = "UPDATE addons SET tv_covers = '%s'" % tv_covers
             elif movie_backdrops:
                 sql_update = "UPDATE addons SET movie_backdrops = '%s'" % movie_backdrops
             elif tv_backdrops:
                 sql_update = "UPDATE addons SET tv_backdrops = '%s'" % tv_backdrops
+            elif last_update:
+                sql_update = "UPDATE addons SET last_update = '%s'" % last_update
             else:
                 print 'No update field specified'
                 return
@@ -538,7 +548,7 @@ class MetaData:
             print 'Invalid addon id'
             return
         
-        print 'Updating addons table addon id: %s covers: %s movie_backdrops: %s tv_backdrops: %s' % (addon_id, covers, movie_backdrops, tv_backdrops)
+        print 'Updating addons table addon id: %s movie_covers: %s tv_covers: %s movie_backdrops: %s tv_backdrops: %s last_update: %s' % (addon_id, movie_covers, tv_covers, movie_backdrops, tv_backdrops, last_update)
         print 'SQL Update: %s' % sql_update
         try:    
             self.dbcur.execute(sql_update)
